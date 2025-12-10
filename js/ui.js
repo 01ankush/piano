@@ -5,7 +5,8 @@ class UIManager {
             game: document.getElementById('game-screen'),
             gameover: document.getElementById('gameover-screen'),
             leaderboard: document.getElementById('leaderboard-screen'),
-            pause: document.getElementById('pause-screen')
+            pause: document.getElementById('pause-screen'),
+            levelSelect: document.getElementById('level-select-screen')
         };
         
         this.currentScreen = 'menu';
@@ -16,10 +17,8 @@ class UIManager {
     initEventListeners() {
         // Menu screen buttons
         document.getElementById('start-btn').addEventListener('click', () => {
-            this.showScreen('game');
-            if (window.game) {
-                window.game.start();
-            }
+            this.showScreen('levelSelect');
+            this.updateSongList();
         });
 
         document.getElementById('leaderboard-btn').addEventListener('click', () => {
@@ -67,6 +66,11 @@ class UIManager {
 
         // Leaderboard screen buttons
         document.getElementById('back-btn').addEventListener('click', () => {
+            this.showScreen('menu');
+        });
+
+        // Level select screen buttons
+        document.getElementById('back-to-menu-btn').addEventListener('click', () => {
             this.showScreen('menu');
         });
     }
@@ -196,6 +200,35 @@ class UIManager {
 
     loadHighScore() {
         this.updateHighScoreDisplay();
+    }
+
+    updateSongList() {
+        const songsList = document.getElementById('songs-list');
+        if (!songsList || !window.game) return;
+
+        const songs = window.game.songManager.getAllSongs();
+        songsList.innerHTML = '';
+
+        songs.forEach(song => {
+            const songItem = document.createElement('div');
+            songItem.className = 'song-item';
+            songItem.innerHTML = `
+                <div class="song-info">
+                    <h3>${song.name}</h3>
+                    <p>BPM: ${song.bpm} | Duration: ${song.duration}s</p>
+                </div>
+                <button class="btn btn-primary play-song-btn" data-song-id="${song.id}">PLAY</button>
+            `;
+            
+            songItem.querySelector('.play-song-btn').addEventListener('click', () => {
+                this.showScreen('game');
+                if (window.game) {
+                    window.game.start(song.id);
+                }
+            });
+            
+            songsList.appendChild(songItem);
+        });
     }
 }
 

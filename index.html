@@ -14,11 +14,20 @@
             <div class="menu-content">
                 <h1 class="game-title">🎹 MAGIC BEATS</h1>
                 <p class="game-subtitle">Tap the dark tiles to the beat!</p>
-                <button id="start-btn" class="btn btn-primary">START GAME</button>
+                <button id="start-btn" class="btn btn-primary">SELECT SONG</button>
                 <button id="leaderboard-btn" class="btn btn-secondary">LEADERBOARD</button>
                 <div class="high-score-display">
                     <p>High Score: <span id="high-score-value">0</span></p>
                 </div>
+            </div>
+        </div>
+
+        <!-- Level Selection Screen -->
+        <div id="level-select-screen" class="screen">
+            <div class="level-select-content">
+                <h2>SELECT SONG</h2>
+                <div id="songs-list" class="songs-list"></div>
+                <button id="back-to-menu-btn" class="btn btn-secondary">BACK</button>
             </div>
         </div>
 
@@ -91,6 +100,8 @@
     <script src="js/audio.js"></script>
     <script src="js/tile.js"></script>
     <script src="js/beatmap.js"></script>
+    <script src="js/pianoNotes.js"></script>
+    <script src="js/songs.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/game.js"></script>
 </body>

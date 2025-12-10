@@ -4,7 +4,8 @@ class Game {
         this.ctx = this.canvas.getContext('2d');
         this.ui = new UIManager();
         this.audioManager = new AudioManager();
-        this.beatMap = new BeatMap();
+        this.songManager = new SongManager();
+        this.pianoNotes = new PianoNotes();
         
         this.tiles = [];
         this.columns = 4;
@@ -21,15 +22,24 @@ class Game {
         this.gameSpeed = 200; // pixels per second
         this.baseSpeed = 200;
         this.gameTime = 0;
+        this.songTime = 0; // Time in the song
         this.isRunning = false;
         this.isPaused = false;
         this.lastFrameTime = 0;
+        this.songStartTime = 0;
         
         this.tapZoneHeight = 50;
+        this.currentSong = null;
+        this.lastSpawnedBeatTime = -1;
         
         this.setupCanvas();
         this.setupInput();
         this.audioManager.init();
+        this.pianoNotes.init();
+        
+        // Timing judgment thresholds (in seconds)
+        this.timingPerfect = 0.08; // ±80ms
+        this.timingGood = 0.15; // ±150ms
     }
 
     setupCanvas() {
@@ -187,6 +197,42 @@ class Game {
         // Handle correct tap on dark tile
         if (targetDarkTile) {
             targetDarkTile.tapped = true;
+            targetDarkTile.tapTime = this.songTime;
+            
+            // Calculate timing judgment
+            let timingDiff = 0;
+            if (targetDarkTile.beatTime !== null) {
+                timingDiff = Math.abs(this.songTime - targetDarkTile.beatTime);
+                
+                if (timingDiff <= this.timingPerfect) {
+                    targetDarkTile.timingJudgment = 'perfect';
+                } else if (timingDiff <= this.timingGood) {
+                    targetDarkTile.timingJudgment = 'good';
+                } else {
+                    targetDarkTile.timingJudgment = 'miss';
+                }
+            } else {
+                targetDarkTile.timingJudgment = 'good'; // Default if no beat time
+            }
+            
+            // Play piano note sound
+            if (targetDarkTile.sound) {
+                this.pianoNotes.playNote(targetDarkTile.sound, 0.4);
+            } else {
+                this.pianoNotes.playColumnNote(targetDarkTile.column, 0.4);
+            }
+            
+            // Show timing feedback
+            this.showTimingFeedback(targetDarkTile.timingJudgment, targetDarkTile.column);
+            
+            // Score based on timing
+            let scoreMultiplier = 1.0;
+            if (targetDarkTile.timingJudgment === 'perfect') {
+                scoreMultiplier = 1.5;
+            } else if (targetDarkTile.timingJudgment === 'good') {
+                scoreMultiplier = 1.0;
+            }
+            
             this.correctTaps++;
             this.combo++;
             this.bestCombo = Math.max(this.bestCombo, this.combo);
@@ -198,11 +244,9 @@ class Game {
             // Calculate score
             const baseScore = 10;
             const comboBonus = this.combo * 2;
-            const multiplierBonus = this.multiplier;
+            const multiplierBonus = this.multiplier * scoreMultiplier;
             const points = Math.floor(baseScore * multiplierBonus + comboBonus);
             this.score += points;
-            
-            this.audioManager.playTapSound();
             
             // Remove tile after short delay
             setTimeout(() => {
@@ -214,19 +258,44 @@ class Game {
         }
     }
 
-    start() {
+    start(songId = null) {
         this.reset();
+        
+        // Load song if provided, otherwise use default
+        if (songId) {
+            this.currentSong = this.songManager.loadSong(songId);
+        } else {
+            // Use first song as default
+            const songs = this.songManager.getAllSongs();
+            if (songs.length > 0) {
+                this.currentSong = this.songManager.loadSong(songs[0].id);
+            }
+        }
+        
+        if (this.currentSong) {
+            this.songManager.resetSong();
+            
+            // Don't play background audio - only piano notes on tap
+            // Audio loading removed - we only want piano note sounds
+        }
+        
         this.isRunning = true;
         this.isPaused = false;
         this.gameTime = 0;
+        this.songTime = 0;
+        this.songStartTime = performance.now();
         this.lastFrameTime = performance.now();
-        this.beatMap.reset();
-        this.beatMap.pattern = this.beatMap.generateDifficultyPattern(0);
+        this.lastSpawnedBeatTime = -1;
+        
         this.gameLoop();
     }
 
     restart() {
-        this.start();
+        if (this.currentSong) {
+            this.start(this.currentSong.id);
+        } else {
+            this.start();
+        }
     }
 
     pause() {
@@ -276,8 +345,14 @@ class Game {
         this.ui.showGameOver(this.score, this.bestCombo, accuracy);
     }
 
-    spawnTile(column) {
+    spawnTile(column, sound = null, beatTime = null) {
         if (column < 0 || column >= this.columns) return;
+        
+        // Default sound based on column if not provided
+        if (!sound) {
+            const noteMap = ['C4', 'D4', 'E4', 'F4'];
+            sound = noteMap[column];
+        }
         
         // Create dark tile (needs to be tapped)
         const tile = new Tile(
@@ -286,7 +361,9 @@ class Game {
             this.columnWidth,
             80, // Tile height
             column,
-            true // isDark
+            true, // isDark
+            sound, // Piano note sound
+            beatTime // Expected beat time
         );
         
         this.tiles.push(tile);
@@ -308,27 +385,106 @@ class Game {
         this.tiles.push(tile);
     }
 
+    // Show timing feedback (Perfect/Good/Miss)
+    showTimingFeedback(judgment, column) {
+        // Create visual feedback element
+        const feedback = document.createElement('div');
+        feedback.className = `timing-feedback timing-${judgment}`;
+        feedback.textContent = judgment.toUpperCase();
+        
+        // Position based on column
+        const columnWidth = this.canvas.width / this.columns;
+        const x = column * columnWidth + columnWidth / 2;
+        const y = this.canvas.height - 100;
+        
+        feedback.style.cssText = `
+            position: fixed;
+            left: ${x}px;
+            top: ${y}px;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            font-weight: bold;
+            color: ${judgment === 'perfect' ? '#00ff88' : judgment === 'good' ? '#00f5ff' : '#ff0000'};
+            text-shadow: 0 0 20px ${judgment === 'perfect' ? 'rgba(0, 255, 136, 0.8)' : judgment === 'good' ? 'rgba(0, 245, 255, 0.8)' : 'rgba(255, 0, 0, 0.8)'};
+            pointer-events: none;
+            z-index: 1000;
+            animation: fadeUp 1s ease-out forwards;
+        `;
+        
+        document.body.appendChild(feedback);
+        
+        // Remove after animation
+        setTimeout(() => {
+            if (feedback.parentNode) {
+                feedback.parentNode.removeChild(feedback);
+            }
+        }, 1000);
+    }
+
     update(deltaTime) {
         if (!this.isRunning || this.isPaused) return;
 
         this.gameTime += deltaTime;
         
-        // Increase difficulty over time
-        const speedMultiplier = 1 + (this.gameTime / 60); // Gradually increase speed
-        this.gameSpeed = this.baseSpeed * Math.min(speedMultiplier, 3); // Cap at 3x speed
+        // Update song time - use game time (no background audio)
+        this.songTime = this.gameTime;
         
-        // Generate tiles based on beat map
-        const nextBeat = this.beatMap.getNextBeat(this.gameTime);
-        if (nextBeat !== null) {
-            if (nextBeat >= 0) {
-                this.spawnTile(nextBeat);
+        // Calculate speed based on song BPM if available
+        if (this.currentSong) {
+            // Speed should allow tiles to reach tap zone at the right time
+            // Distance from spawn to tap zone / time until beat should hit
+            const timeToReachTapZone = 2.0; // seconds for tile to travel
+            const distanceToTravel = this.canvas.height + 50; // from top to tap zone
+            this.gameSpeed = distanceToTravel / timeToReachTapZone;
+        } else {
+            // Fallback to dynamic speed
+            const speedMultiplier = 1 + (this.gameTime / 60);
+            this.gameSpeed = this.baseSpeed * Math.min(speedMultiplier, 3);
+        }
+        
+        // Spawn tiles based on song beat map
+        if (this.currentSong) {
+            // Calculate how far ahead to spawn tiles (so they reach tap zone when beat plays)
+            // Time for tile to travel from top to tap zone
+            const timeToReachTapZone = (this.canvas.height + 50) / this.gameSpeed;
+            const spawnAheadTime = timeToReachTapZone;
+            
+            // Target time when beat should hit tap zone
+            const targetBeatTime = this.songTime + spawnAheadTime;
+            
+            // Get all beats that should spawn now (larger window to catch beats)
+            const spawnWindowStart = targetBeatTime - 0.5; // Look 0.5s before
+            const spawnWindowEnd = targetBeatTime + 0.5;   // Look 0.5s ahead
+            
+            // Spawn all beats in this window
+            let maxSpawns = 20; // Prevent infinite loop
+            while (maxSpawns > 0) {
+                const nextBeat = this.songManager.getNextBeat(spawnWindowStart);
+                if (!nextBeat) break;
+                
+                // Check if beat is within spawn window
+                if (nextBeat.time > spawnWindowEnd) break;
+                
+                // Ensure column is valid (0-3)
+                const column = Math.max(0, Math.min(3, nextBeat.column));
+                const sound = nextBeat.sound || null;
+                const beatTime = nextBeat.time;
+                
+                this.spawnTile(column, sound, beatTime);
+                maxSpawns--;
             }
-            // Occasionally spawn light tiles as decoys (10% chance)
-            if (Math.random() < 0.1) {
-                const decoyColumn = Math.floor(Math.random() * this.columns);
-                if (decoyColumn !== nextBeat) {
-                    this.spawnLightTile(decoyColumn);
-                }
+            
+            // Check if song ended
+            if (this.songTime >= this.currentSong.duration) {
+                // Song finished - show completion
+                this.gameOver();
+                return;
+            }
+        } else {
+            // Fallback to old beat map system
+            const nextBeat = this.beatMap.getNextBeat(this.gameTime);
+            if (nextBeat !== null && nextBeat >= 0) {
+                this.spawnTile(nextBeat);
             }
         }
         
