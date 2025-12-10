@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>Magic Beats - Piano Tiles Game</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="game-container">
+        <!-- Menu Screen -->
+        <div id="menu-screen" class="screen active">
+            <div class="menu-content">
+                <h1 class="game-title">🎹 MAGIC BEATS</h1>
+                <p class="game-subtitle">Tap the dark tiles to the beat!</p>
+                <button id="start-btn" class="btn btn-primary">START GAME</button>
+                <button id="leaderboard-btn" class="btn btn-secondary">LEADERBOARD</button>
+                <div class="high-score-display">
+                    <p>High Score: <span id="high-score-value">0</span></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="game-screen" class="screen">
+            <canvas id="game-canvas"></canvas>
+            <div class="game-ui">
+                <div class="score-display">
+                    <div class="score-item">
+                        <span class="label">Score</span>
+                        <span id="current-score">0</span>
+                    </div>
+                    <div class="score-item">
+                        <span class="label">Combo</span>
+                        <span id="combo-count">0</span>
+                    </div>
+                    <div class="score-item">
+                        <span class="label">Multiplier</span>
+                        <span id="multiplier">1x</span>
+                    </div>
+                </div>
+                <button id="pause-btn" class="btn-small">⏸</button>
+            </div>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="gameover-screen" class="screen">
+            <div class="gameover-content">
+                <h2>GAME OVER</h2>
+                <div class="final-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">Final Score</span>
+                        <span id="final-score" class="stat-value">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Best Combo</span>
+                        <span id="best-combo" class="stat-value">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Accuracy</span>
+                        <span id="accuracy" class="stat-value">0%</span>
+                    </div>
+                </div>
+                <div class="gameover-buttons">
+                    <button id="restart-btn" class="btn btn-primary">PLAY AGAIN</button>
+                    <button id="menu-btn" class="btn btn-secondary">MENU</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Leaderboard Screen -->
+        <div id="leaderboard-screen" class="screen">
+            <div class="leaderboard-content">
+                <h2>LEADERBOARD</h2>
+                <div id="leaderboard-list"></div>
+                <button id="back-btn" class="btn btn-secondary">BACK</button>
+            </div>
+        </div>
+
+        <!-- Pause Screen -->
+        <div id="pause-screen" class="screen">
+            <div class="pause-content">
+                <h2>PAUSED</h2>
+                <button id="resume-btn" class="btn btn-primary">RESUME</button>
+                <button id="quit-btn" class="btn btn-secondary">QUIT</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/audio.js"></script>
+    <script src="js/tile.js"></script>
+    <script src="js/beatmap.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/game.js"></script>
+</body>
+</html>
+
