@@ -1,73 +1,69 @@
-class PianoNotes {
-    constructor() {
-        this.notes = {
-            'C4': 261.63,
-            'D4': 293.66,
-            'E4': 329.63,
-            'F4': 349.23,
-            'G4': 392.00,
-            'A4': 440.00,
-            'B4': 493.88,
-            'C5': 523.25
-        };
+// Audio loader for piano notes
+const noteNames = ["C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5"];
+const noteAudio = {};
+
+function loadAudio() {
+    // Load piano notes using Web Audio API (synthesized)
+    // If you have audio files, uncomment and use:
+    /*
+    noteNames.forEach(name => {
+        const a = new Audio(`audio/piano_${name}.mp3`);
+        a.preload = "auto";
+        noteAudio[name] = a;
+    });
+    */
+}
+
+function playNote(name) {
+    // Use synthesized notes (Web Audio API)
+    const frequencies = {
+        'C4': 261.63,
+        'D4': 293.66,
+        'E4': 329.63,
+        'F4': 349.23,
+        'G4': 392.00,
+        'A4': 440.00,
+        'B4': 493.88,
+        'C5': 523.25
+    };
+    
+    // If audio files are loaded, use them
+    if (noteAudio[name]) {
+        const a = noteAudio[name];
+        a.currentTime = 0;
+        a.play().catch(e => console.warn('Audio play error:', e));
+        return;
+    }
+    
+    // Otherwise synthesize the note
+    try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const frequency = frequencies[name];
+        if (!frequency) return;
         
-        this.audioContext = null;
-        this.loadedSounds = {};
-    }
-
-    init() {
-        try {
-            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        } catch (e) {
-            console.warn('Web Audio API not supported');
-        }
-    }
-
-    // Play a piano note by name (e.g., 'C4', 'E4')
-    playNote(noteName, volume = 0.3, duration = 0.2) {
-        if (!this.audioContext) {
-            this.init();
-            if (!this.audioContext) return;
-        }
-
-        const frequency = this.notes[noteName];
-        if (!frequency) {
-            console.warn(`Note ${noteName} not found`);
-            return;
-        }
-
-        // Create oscillator for the note
-        const oscillator = this.audioContext.createOscillator();
-        const gainNode = this.audioContext.createGain();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
         
         oscillator.connect(gainNode);
-        gainNode.connect(this.audioContext.destination);
+        gainNode.connect(audioContext.destination);
         
         oscillator.frequency.value = frequency;
-        oscillator.type = 'sine'; // Piano-like sound
+        oscillator.type = 'sine';
         
-        // Envelope: quick attack, smooth decay
-        const now = this.audioContext.currentTime;
+        const now = audioContext.currentTime;
         gainNode.gain.setValueAtTime(0, now);
-        gainNode.gain.linearRampToValueAtTime(volume, now + 0.01);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, now + duration);
+        gainNode.gain.linearRampToValueAtTime(0.3, now + 0.01);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
         
         oscillator.start(now);
-        oscillator.stop(now + duration);
+        oscillator.stop(now + 0.2);
+    } catch (e) {
+        console.warn('Audio synthesis error:', e);
     }
+}
 
-    // Play note for specific column (maps columns to notes)
-    playColumnNote(column, volume = 0.3) {
-        const noteMap = ['C4', 'D4', 'E4', 'F4']; // Columns 0-3
-        const noteName = noteMap[Math.max(0, Math.min(3, column))];
-        this.playNote(noteName, volume);
-    }
-
-    // Play a chord (multiple notes at once)
-    playChord(noteNames, volume = 0.2) {
-        noteNames.forEach(noteName => {
-            this.playNote(noteName, volume, 0.3);
-        });
-    }
+function getSongTime() {
+    // No background audio, return 0 (we'll use game time instead)
+    return 0;
 }
 
