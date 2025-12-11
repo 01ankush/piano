@@ -283,21 +283,22 @@ class KGFGame {
         
         if (lane < 0 || lane >= this.columns) return;
 
-        // Find closest hittable tile in this lane near hit line
+        // Find tile that was tapped - check entire screen, not just bottom area
         let bestTile = null;
         let bestDistance = Infinity;
 
+        // First, check if tap is directly on any tile in this lane (anywhere on screen)
         this.tiles.forEach(tile => {
             if (tile.lane !== lane || tile.hit || tile.missed) return;
 
-            // Check if tile is in or near hit zone
-            const tileBottom = tile.y + this.TILE_HEIGHT;
+            const tileLeft = tile.lane * laneWidth;
+            const tileRight = tileLeft + laneWidth;
             const tileTop = tile.y;
-            const hitZoneTop = this.HIT_LINE_Y - 80; // Allow tapping above hit line
-            const hitZoneBottom = this.HIT_LINE_Y + 150; // Allow tapping below hit line
+            const tileBottom = tile.y + this.TILE_HEIGHT;
             
-            if (tileBottom >= hitZoneTop && tileTop <= hitZoneBottom) {
-                // Calculate distance from hit line
+            // Check if tap coordinates are within tile bounds (anywhere on screen)
+            if (x >= tileLeft && x <= tileRight && y >= tileTop && y <= tileBottom) {
+                // Calculate distance from hit line for timing judgment
                 const tileCenterY = tile.y + this.TILE_HEIGHT / 2;
                 const distance = Math.abs(tileCenterY - this.HIT_LINE_Y);
                 
@@ -308,25 +309,47 @@ class KGFGame {
             }
         });
 
+        // If no direct hit, find closest tile in this column (tap anywhere in column)
         if (!bestTile) {
-            // Tapped empty lane or no tile in hit zone - don't penalize
+            this.tiles.forEach(tile => {
+                if (tile.lane !== lane || tile.hit || tile.missed) return;
+
+                // Check if tap is in the same column (x position matches)
+                const tileLeft = tile.lane * laneWidth;
+                const tileRight = tileLeft + laneWidth;
+                
+                if (x >= tileLeft && x <= tileRight) {
+                    // Find closest tile vertically to the tap position
+                    const tileCenterY = tile.y + this.TILE_HEIGHT / 2;
+                    const distance = Math.abs(y - tileCenterY);
+                    
+                    if (distance < bestDistance) {
+                        bestDistance = distance;
+                        bestTile = tile;
+                    }
+                }
+            });
+        }
+
+        if (!bestTile) {
+            // Tapped empty lane - don't penalize
             return;
         }
 
-        // Calculate timing based on position
+        // Calculate timing based on position relative to hit line
         const tileCenterY = bestTile.y + this.TILE_HEIGHT / 2;
         const distanceFromHitLine = Math.abs(tileCenterY - this.HIT_LINE_Y);
         const timingDiff = distanceFromHitLine / this.gameSpeed; // Convert pixels to time
 
-        // Timing judgment with more forgiving windows
-        let judgment = 'miss';
-        if (timingDiff <= 0.12) { // ±120ms for perfect
+        // Timing judgment - more forgiving for taps anywhere on screen
+        let judgment = 'good'; // Default to good
+        if (timingDiff <= 0.15) { // ±150ms for perfect
             judgment = 'perfect';
-        } else if (timingDiff <= 0.20) { // ±200ms for good
+        } else if (timingDiff <= 0.30) { // ±300ms for good
             judgment = 'good';
         } else {
-            // Too far from hit line - but don't end game, just don't score
-            return;
+            // Too far from hit line - still accept but as "good"
+            judgment = 'good';
         }
 
         // Hit the tile
