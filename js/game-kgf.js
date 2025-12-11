@@ -23,9 +23,9 @@ class KGFGame {
         
         // Tile spawning
         this.spawnedIndex = 0;
-        this.FALL_TIME = 1.6; // seconds from spawn to hit line
+        this.FALL_TIME = 2.5; // seconds from spawn to hit line (increased for more time)
         this.HIT_LINE_Y = 0;
-        this.TILE_HEIGHT = 80;
+        this.TILE_HEIGHT = 100;
         
         // Game speed
         this.gameSpeed = 200;
@@ -95,6 +95,14 @@ class KGFGame {
         this.gameTime = 0;
         this.lastFrameTime = performance.now();
         this.spawnedIndex = 0;
+        
+        // Reset all beats in beatmap
+        if (window.KGF_BEATMAP) {
+            window.KGF_BEATMAP.forEach(beat => {
+                beat.spawned = false;
+            });
+        }
+        
         this.gameLoop();
     }
 
@@ -162,29 +170,50 @@ class KGFGame {
                 const beat = window.KGF_BEATMAP[this.spawnedIndex];
                 const spawnTime = beat.t - this.FALL_TIME;
                 
-                if (this.gameTime >= spawnTime) {
+                // Spawn tiles ahead of time so they have time to fall
+                if (this.gameTime >= spawnTime && this.gameTime < spawnTime + 0.1) {
                     this.spawnTileFromBeat(beat);
                     this.spawnedIndex++;
+                } else if (this.gameTime < spawnTime) {
+                    break; // Not time to spawn yet
                 } else {
-                    break;
+                    // Missed spawn window, skip this beat
+                    this.spawnedIndex++;
                 }
             }
         }
 
-        // Move tiles
+        // Move tiles based on speed
         this.tiles.forEach(tile => {
             const timeToHit = tile.targetTime - this.gameTime;
-            const progress = 1 - (timeToHit / this.FALL_TIME);
-            tile.y = -this.TILE_HEIGHT + progress * (this.HIT_LINE_Y + this.TILE_HEIGHT);
+            
+            if (timeToHit > 0) {
+                // Tile is still falling
+                const progress = 1 - (timeToHit / this.FALL_TIME);
+                tile.y = -this.TILE_HEIGHT + progress * (this.HIT_LINE_Y + this.TILE_HEIGHT);
+            } else {
+                // Tile has passed hit line - continue moving down
+                const extraTime = -timeToHit;
+                tile.y = this.HIT_LINE_Y + this.TILE_HEIGHT + (extraTime * this.gameSpeed);
+            }
         });
 
-        // Mark missed tiles
+        // Mark missed tiles - check if dark tiles passed hit line without being tapped
         this.tiles.forEach(tile => {
-            if (!tile.hit && !tile.missed && this.gameTime - tile.targetTime > 0.16) {
-                tile.missed = true;
-                this.misses++;
-                this.combo = 0;
-                this.gameOver();
+            if (!tile.hit && !tile.missed) {
+                // Check if tile has passed the hit line
+                const tileBottom = tile.y + this.TILE_HEIGHT;
+                const timePastHit = this.gameTime - tile.targetTime;
+                
+                // If dark tile passed hit line (bottom of tile is past hit line), it's a miss
+                // Use both position and time check for accuracy
+                if (tileBottom > this.HIT_LINE_Y + 30 && timePastHit > 0.05) {
+                    tile.missed = true;
+                    this.misses++;
+                    this.combo = 0;
+                    this.gameOver();
+                    return; // Stop checking other tiles
+                }
             }
         });
 
@@ -256,35 +285,47 @@ class KGFGame {
 
         // Find closest hittable tile in this lane near hit line
         let bestTile = null;
-        let bestDiff = 999;
+        let bestDistance = Infinity;
 
         this.tiles.forEach(tile => {
             if (tile.lane !== lane || tile.hit || tile.missed) return;
 
-            const diff = Math.abs(this.gameTime - tile.targetTime);
-            if (diff < bestDiff) {
-                bestDiff = diff;
-                bestTile = tile;
+            // Check if tile is in or near hit zone
+            const tileBottom = tile.y + this.TILE_HEIGHT;
+            const tileTop = tile.y;
+            const hitZoneTop = this.HIT_LINE_Y - 80; // Allow tapping above hit line
+            const hitZoneBottom = this.HIT_LINE_Y + 150; // Allow tapping below hit line
+            
+            if (tileBottom >= hitZoneTop && tileTop <= hitZoneBottom) {
+                // Calculate distance from hit line
+                const tileCenterY = tile.y + this.TILE_HEIGHT / 2;
+                const distance = Math.abs(tileCenterY - this.HIT_LINE_Y);
+                
+                if (distance < bestDistance) {
+                    bestDistance = distance;
+                    bestTile = tile;
+                }
             }
         });
 
         if (!bestTile) {
-            // Tapped empty lane
-            this.combo = 0;
+            // Tapped empty lane or no tile in hit zone - don't penalize
             return;
         }
 
-        // Timing judgment
+        // Calculate timing based on position
+        const tileCenterY = bestTile.y + this.TILE_HEIGHT / 2;
+        const distanceFromHitLine = Math.abs(tileCenterY - this.HIT_LINE_Y);
+        const timingDiff = distanceFromHitLine / this.gameSpeed; // Convert pixels to time
+
+        // Timing judgment with more forgiving windows
         let judgment = 'miss';
-        if (bestDiff <= 0.10) {
+        if (timingDiff <= 0.12) { // ±120ms for perfect
             judgment = 'perfect';
-        } else if (bestDiff <= 0.18) {
+        } else if (timingDiff <= 0.20) { // ±200ms for good
             judgment = 'good';
         } else {
-            this.combo = 0;
-            bestTile.missed = true;
-            this.misses++;
-            this.gameOver();
+            // Too far from hit line - but don't end game, just don't score
             return;
         }
 
